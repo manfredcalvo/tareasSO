@@ -2,7 +2,7 @@
 
 #include<stdio.h>
 #include <stdlib.h>
-
+//usar la opcion -sortby de strace 
 int main(int argc, char *argv[]){
 
 	FILE *fp;
