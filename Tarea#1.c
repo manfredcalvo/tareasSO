@@ -3,21 +3,98 @@
 
 #include<stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
 //usar la opcion -sortby de strace
 
-char *commandStrace = "strace -t -i ";
+char *commandStrace = "strace -t -i %s 2>&1";
  
-int main(int argc, char *argv[]){
+enum OPTIONS{v, V, NUMBER_OF_OPTIONS};
 
-	char * allComand = (char *)malloc(1000);
+static const char* options[] = { "-V", "-v"};
+
+int containsOption(char *arg){
+
+
+	
+	int n = NUMBER_OF_OPTIONS;
+	
+	int li = 0;
+	int ls = n - 1;
+	int medio;
+	
+	while(li <= ls){
+	
+		medio = (li + ls) / 2;
+		
+		int compare = strcmp(options[medio], arg); 
+			
+		if( compare == 0){
+			
+			return medio;		
+		}else{
+			if(compare < 0){
+				
+				li = medio + 1;
+											
+			}else{
+				ls = medio - 1;			
+			}		
+		}
+		
+	}
+			
+
+	return -1;
+	
+}
+
+int main(int argc, char *argv[]){
 	
 	int x = 0;
 	
-	for(x = 1; x < argc; x++){
+	int *values = NULL;
+	
+	int totalOptions = 0;	
+
+	for(x = 1; x < argc; x++){		
+
+		int option = containsOption(argv[x]);
+		
+		if(option != -1){
+			
+			values = (int*) realloc(values, (totalOptions + 1) * sizeof(int));
+			values[totalOptions++] = option;
+					
+		}else{
+		
+			//throw exception unknown option
+		}
+	}
+		
+      	char * commandBuilder = "";
+	char *aux;	
+	int c;
+	
+	for(x = totalOptions + 1, c = 0; x < argc; x++, c++){
+
+		aux = commandBuilder;
+		commandBuilder = (char *) malloc(2 + strlen(commandBuilder)+ strlen(argv[x]));
+		strcpy(commandBuilder, aux);
+		if(c > 0){
+			strcat(commandBuilder, " ");		
+		}
+		strcat(commandBuilder, argv[x]);  
 		
 	}	
+	
+	printf("Program to execute:%s\n", commandBuilder);
 
-	FILE *fp;
+	char *finalCommand = (char*) malloc(strlen(commandBuilder) + strlen(commandStrace));
+	
+	sprintf(finalCommand, commandStrace, commandBuilder);
+	printf("Final command:%s\n", finalCommand);
+	/*FILE *fp;
 		
 	int status;
 
@@ -29,16 +106,6 @@ int main(int argc, char *argv[]){
 	
 	}
 	
-	char * line = NULL;
-	size_t len = 0;
-    	ssize_t read;
-	int in;
-	
-	/*while((read = getline(&line, &len, fp)) != -1){
-		
-		//printf("%s\n", line);
-	
-	}*/
 	int c;
 	char valueToFound = '=';
 	
@@ -60,14 +127,7 @@ int main(int argc, char *argv[]){
 		
     	}
 
-	/*printf("PrintA:%c\n", (char)fgetc(fp));
-	printf("PrintB:%c\n", (char)fgetc(fp));
-printf("PrintC:%c\n", (char)fgetc(fp));
-printf("PrintC:%c\n", (char)fgetc(fp));
-printf("PrintC:%c\n", (char)fgetc(fp));
-printf("PrintC:%c\n", (char)fgetc(fp));*/
-
-	status = pclose(fp);
+	status = pclose(fp);*/
 
 	return 0;
 
