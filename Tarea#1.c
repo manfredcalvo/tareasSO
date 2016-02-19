@@ -7,15 +7,29 @@
 
 //usar la opcion -sortby de strace
 
-char *commandStrace = "strace -t -i %s 2>&1";
- 
-enum OPTIONS{v, V, NUMBER_OF_OPTIONS};
+char *commandStrace = "strace -t -i -qq -q %s %s 2>&1"; 
 
-static const char* options[] = { "-V", "-v"};
+char *messageTemplate = "Invalid option: %s, Available options: -V -S -s\n";
+
+enum OPTIONS{ S, V, v, NUMBER_OF_OPTIONS};
+
+static const char* options[] = { "-S", "-V", "-v"};
+
+char * concatCharToString(char *a, char c){
+
+	int sizeInput = strlen(a);
+		
+	char *result = (char*) malloc(sizeInput + 2);
+
+	strcpy(result, a);
+	result[sizeInput++] = c;
+	result[sizeInput] = '\0';
+	
+	return result;
+
+}
 
 int containsOption(char *arg){
-
-
 	
 	int n = NUMBER_OF_OPTIONS;
 	
@@ -49,6 +63,26 @@ int containsOption(char *arg){
 	
 }
 
+void pauseProgram(FILE *in){
+
+ printf ( "Press [Enter] to continue . . ." );
+ fflush ( stdout );
+
+ int ch;
+
+ do
+    ch = fgetc ( in ); 
+ while ( ch != EOF && ch != '\n' ); 
+
+ clearerr ( in );
+
+ printf("\n");
+
+//while ( getchar() != '\n' );
+
+}
+
+
 int main(int argc, char *argv[]){
 	
 	int x = 0;
@@ -67,16 +101,27 @@ int main(int argc, char *argv[]){
 			values[totalOptions++] = option;
 					
 		}else{
-		
-			//throw exception unknown option
+				
+			if(argv[x][0] == '-'){
+				//i read an invalid option
+				char *finalMessage = (char *) malloc(strlen(messageTemplate) + strlen(argv[x]));
+				sprintf(finalMessage, messageTemplate, argv[x]);
+ 				fprintf(stderr, "%s", finalMessage); exit(EXIT_FAILURE);				
+			}else{
+				//i read the last option to rastreador
+				
+				break;			
+			}
 		}
 	}
 		
       	char * commandBuilder = "";
 	char *aux;	
 	int c;
-	
-	for(x = totalOptions + 1, c = 0; x < argc; x++, c++){
+
+	//continue to read the arguments, i think that is the process to rastrear
+	 
+	for(c = 0; x < argc; x++, c++){
 
 		aux = commandBuilder;
 		commandBuilder = (char *) malloc(2 + strlen(commandBuilder)+ strlen(argv[x]));
@@ -88,31 +133,58 @@ int main(int argc, char *argv[]){
 		
 	}	
 	
-	printf("Program to execute:%s\n", commandBuilder);
+	char outputOption[3] = {'-', 'c', '\0'};
+
+	int stopAfterEachCall = 0;
+	
+	for(x = 0; x < totalOptions; x++){
+	
+		switch(values[x]){
+			
+			case V: {
+					stopAfterEachCall = 1; 
+					strcpy(outputOption, "-C");
+				}					
+				break;
+			
+			case v: strcpy(outputOption, "-C"); break;
+			
+			default:  fprintf(stderr, "Invalite option...\n"); exit(EXIT_FAILURE);	
+		}
+		
+	}	
+
+	//printf("Program to execute:%s\n", commandBuilder);
 
 	char *finalCommand = (char*) malloc(strlen(commandBuilder) + strlen(commandStrace));
 	
-	sprintf(finalCommand, commandStrace, commandBuilder);
-	printf("Final command:%s\n", finalCommand);
-	/*FILE *fp;
+	sprintf(finalCommand, commandStrace, outputOption, commandBuilder);
+	
+	//printf("Final command:%s\n", finalCommand);
+	
+	FILE *fp;
 		
 	int status;
 
 	char path[1000];
 
-	fp = popen("strace -t -i ls * 2>&1", "r");
+	fp = popen(finalCommand, "r");
 		
 	if(fp == NULL){
 	
 	}
 	
-	int c;
 	char valueToFound = '=';
 	
+	char *systemCall = "";
+	
+	char *title = "Time     Instruction Pointer System Call";
+
 	while ((c = fgetc(fp)) != EOF) {
 		
 		char v = (char) c;
-		printf("%c", v);
+		
+		systemCall = concatCharToString(systemCall, v);
 		
 		if(v == valueToFound){
 			
@@ -120,14 +192,26 @@ int main(int argc, char *argv[]){
 				valueToFound = '\n';
 			}else{
 				valueToFound = '=';
-				printf("Nuevo system call\n");
+				printf("%s\n", title);
+				printf("%s", systemCall);
+				free(systemCall);
+				systemCall = "";
+				if(stopAfterEachCall){
+					pauseProgram(stdin);			
+				}
+			
+				
 			}
 					
 		}
 		
     	}
+		
+	printf("Cumulative Table\n\n");
+	
+	printf("%s\n", systemCall);
 
-	status = pclose(fp);*/
+	status = pclose(fp);
 
 	return 0;
 
