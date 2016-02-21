@@ -4,6 +4,7 @@
 #include<stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
 
 //usar la opcion -sortby de strace
 
@@ -15,6 +16,27 @@ enum OPTIONS{ S, V, v, NUMBER_OF_OPTIONS};
 
 static const char* options[] = { "-S", "-V", "-v"};
 
+static struct termios oldt, newt;
+
+void restartBehaviour(){
+
+	tcsetattr(0, TCSANOW, &oldt);
+
+}
+void changeBehaviour(){
+
+    tcgetattr(0, &oldt);
+    /*now the settings will be copied*/
+    newt = oldt;
+    /*ICANON normally takes care that one line at a time will be processed
+    that means it will return if it sees a "\n" or an EOF or an EOL*/
+    newt.c_lflag &= ~(ICANON | ECHO);          
+    /*Those new settings will be set to STDIN
+    TCSANOW tells tcsetattr to change attributes immediately. */
+    tcsetattr(0, TCSANOW, &newt);
+
+}
+
 char * concatCharToString(char *a, char c){
 
 	int sizeInput = strlen(a);
@@ -24,6 +46,20 @@ char * concatCharToString(char *a, char c){
 	strcpy(result, a);
 	result[sizeInput++] = c;
 	result[sizeInput] = '\0';
+	
+	return result;
+
+}
+
+char * concatChars(char *a, char *b){
+
+	int sizeA = strlen(a);
+	int sizeB = strlen(b);
+	
+	char *result = (char*) malloc(sizeA  + sizeB);
+
+	strcpy(result, a);
+	strcat(result, b);
 	
 	return result;
 
@@ -63,6 +99,15 @@ int containsOption(char *arg){
 	
 }
 
+void pauseProgramAnyKey(){
+
+ printf ( "Press any key to continue . . .\n" );
+ //fflush ( stdout );
+ getchar();
+	
+ 
+}
+
 void pauseProgram(FILE *in){
 
  printf ( "Press [Enter] to continue . . ." );
@@ -85,12 +130,21 @@ void pauseProgram(FILE *in){
 
 int main(int argc, char *argv[]){
 	
+	changeBehaviour();
+	
 	int x = 0;
 	
 	int *values = NULL;
 	
 	int totalOptions = 0;	
 
+	if(argc < 2){
+
+		fprintf(stderr, "Incorrect number of arguments: %i. I wait at least one.\nYou need to put the name of the program to track.\n", argc - 1); 
+		exit(EXIT_FAILURE);
+		
+	}
+	
 	for(x = 1; x < argc; x++){		
 
 		int option = containsOption(argv[x]);
@@ -133,9 +187,13 @@ int main(int argc, char *argv[]){
 		
 	}	
 	
-	char outputOption[3] = {'-', 'c', '\0'};
-
+	char *outputOption = (char*) malloc(2);
+	
+	strcat(outputOption, "-C");
+	
 	int stopAfterEachCall = 0;
+	int printSystemCalls = 0;
+	
 	
 	for(x = 0; x < totalOptions; x++){
 	
@@ -143,12 +201,18 @@ int main(int argc, char *argv[]){
 			
 			case V: {
 					stopAfterEachCall = 1; 
-					strcpy(outputOption, "-C");
+					printSystemCalls = 1;	
 				}					
 				break;
 			
-			case v: strcpy(outputOption, "-C"); break;
+			case v: printSystemCalls = 1; break;
 			
+			case S:{
+				
+				outputOption = concatChars(outputOption, " -S calls");
+				
+			}break;
+				
 			default:  fprintf(stderr, "Invalite option...\n"); exit(EXIT_FAILURE);	
 		}
 		
@@ -192,12 +256,17 @@ int main(int argc, char *argv[]){
 				valueToFound = '\n';
 			}else{
 				valueToFound = '=';
-				printf("%s\n", title);
-				printf("%s", systemCall);
+				
+				if(printSystemCalls){
+					printf("%s\n", title);
+					printf("%s", systemCall);
+				}
+				
 				free(systemCall);
 				systemCall = "";
 				if(stopAfterEachCall){
-					pauseProgram(stdin);			
+					//pauseProgram(stdin);	
+					pauseProgramAnyKey(stdin);	
 				}
 			
 				
@@ -212,6 +281,8 @@ int main(int argc, char *argv[]){
 	printf("%s\n", systemCall);
 
 	status = pclose(fp);
+
+	restartBehaviour();
 
 	return 0;
 
