@@ -23,3 +23,7 @@ Para ejecutar el programa se deben ejecutar los siguientes pasos:
   	
  
    [opciones de Prog]: Cualquier combinación de opciones permitidas por Prog.
+
+4) Una vez ejecutado el programa si se eligió la opción "-V" el programa se detendrá luego de imprimir cada System Call, para continuar se debe presionar cualquier tecla.
+
+5) Al final de la ejecución se mostrará una tabla con un resumen de cuántas veces se ejecutó cada system call. Si se eligió la opción "-S" esta tabla de mostrará ordenada de mayor a menor.
