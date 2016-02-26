@@ -14,12 +14,155 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/reg.h>
+#include <errno.h>
 #include <sys/syscall.h> 
-/* For constants
-                                   ORIG_EAX etc */
-const char* callname(long call);
+
+#ifdef __amd64__
+#define eax rax
+#define orig_eax orig_rax
+#else
+#endif
+
+
+#define offsetof(a, b) __builtin_offsetof(a,b)
+#define get_reg(child, name) __get_reg(child, offsetof(struct user, regs.name))
+
+
+#define SYSCALL_MAXARGS 6
+enum argtype {
+    ARG_INT,
+    ARG_PTR,
+    ARG_STR
+};
+
+
+long __get_reg(pid_t child, int off) {
+    long val = ptrace(PTRACE_PEEKUSER, child, off);
+    return val;
+}
+
+
+long get_syscall_arg(pid_t child, int which) {
+    switch (which) {
+#ifdef __amd64__
+    case 0: return get_reg(child, rdi);
+    case 1: return get_reg(child, rsi);
+    case 2: return get_reg(child, rdx);
+    case 3: return get_reg(child, r10);
+    case 4: return get_reg(child, r8);
+    case 5: return get_reg(child, r9);
+#else
+    case 0: return get_reg(child, ebx);
+    case 1: return get_reg(child, ecx);
+    case 2: return get_reg(child, edx);
+    case 3: return get_reg(child, esi);
+    case 4: return get_reg(child, edi);
+    case 5: return get_reg(child, ebp);
+#endif
+    default: return -1L;
+    }
+}
+
+char *read_string(pid_t child, unsigned long addr) {
+    char *val = malloc(4096);
+    int allocated = 4096;
+    int read = 0;
+    unsigned long tmp;
+    while (1) {
+        if (read + sizeof tmp > allocated) {
+            allocated *= 2;
+            val = realloc(val, allocated);
+        }
+        tmp = ptrace(PTRACE_PEEKDATA, child, addr + read);
+        if(errno != 0) {
+            val[read] = 0;
+            break;
+        }
+        memcpy(val + read, &tmp, sizeof tmp);
+        if (memchr(&tmp, 0, sizeof tmp) != NULL)
+            break;
+        read += sizeof tmp;
+    }
+    return val;
+}
+
+void print_syscall_args(pid_t child) {
+    int nargs = SYSCALL_MAXARGS;
+    int i;
+    char *strval;
+    for (i = 0; i < nargs; i++) {
+        long arg = get_syscall_arg(child, i);
+        int type =  ARG_INT;
+        switch (type) {
+        case ARG_INT:
+            fprintf(stderr, "%ld", arg);
+            break;
+        case ARG_STR:
+            strval = read_string(child, arg);
+            fprintf(stderr, "\"%s\"", strval);
+            free(strval);
+            break;
+        default:
+            fprintf(stderr, "0x%lx", arg);
+            break;
+        }
+        if (i != nargs - 1)
+            fprintf(stderr, ", ");
+    }
+}
+
+char *(syscall_names[256]) = {
+"exit", "fork", "read", "write", "open", "close", "waitpid", "creat",
+"link", "unlink", "execve", "chdir", "time", "mknod", "chmod",
+"lchown", "break", "oldstat", "lseek", "getpid", "mount", "umount",
+"setuid", "getuid", "stime", "ptrace", "alarm", "oldfstat", "pause",
+"utime", "stty", "gtty", "access", "nice", "ftime", "sync", "kill",
+"rename", "mkdir", "rmdir", "dup", "pipe", "times", "prof", "brk",
+"setgid", "getgid", "signal", "geteuid", "getegid", "acct", "umount2",
+"lock", "ioctl", "fcntl", "mpx", "setpgid", "ulimit", "oldolduname",
+"umask", "chroot", "ustat", "dup2", "getppid", "getpgrp", "setsid",
+"sigaction", "sgetmask", "ssetmask", "setreuid", "setregid",
+"sigsuspend", "sigpending", "sethostname", "setrlimit", "getrlimit",
+"getrusage", "gettimeofday", "settimeofday", "getgroups", "setgroups",
+"select", "symlink", "oldlstat", "readlink", "uselib", "swapon",
+"reboot", "readdir", "mmap", "munmap", "truncate", "ftruncate",
+"fchmod", "fchown", "getpriority", "setpriority", "profil", "statfs",
+"fstatfs", "ioperm", "socketcall", "syslog", "setitimer", "getitimer",
+"stat", "lstat", "fstat", "olduname", "iopl", "vhangup", "idle",
+"vm86old", "wait4", "swapoff", "sysinfo", "ipc", "fsync", "sigreturn",
+"clone", "setdomainname", "uname", "modify_ldt", "adjtimex",
+"mprotect", "sigprocmask", "create_module", "init_module",
+"delete_module", "get_kernel_syms", "quotactl", "getpgid", "fchdir",
+"bdflush", "sysfs", "personality", "afs_syscall", "setfsuid",
+"setfsgid", "_llseek", "getdents", "_newselect", "flock", "msync",
+"readv", "writev", "getsid", "fdatasync", "_sysctl", "mlock",
+"munlock", "mlockall", "munlockall", "sched_setparam",
+"sched_getparam", "sched_setscheduler", "sched_getscheduler",
+"sched_yield", "sched_get_priority_max", "sched_get_priority_min",
+"sched_rr_get_interval", "nanosleep", "mremap", "setresuid",
+"getresuid", "vm86", "query_module", "poll", "nfsservctl",
+"setresgid", "getresgid", "prctl","rt_sigreturn","rt_sigaction",
+"rt_sigprocmask", "rt_sigpending", "rt_sigtimedwait",
+"rt_sigqueueinfo", "rt_sigsuspend", "pread", "pwrite", "chown",
+"getcwd", "capget", "capset", "sigaltstack", "sendfile", "getpmsg",
+"putpmsg", "vfork", "ugetrlimit", "mmap2", "truncate64",
+"ftruncate64", "stat64", "lstat64", "fstat64", "lchown32", "getuid32",
+"getgid32", "geteuid32", "getegid32", "setreuid32", "setregid32",
+"getgroups32", "setgroups32", "fchown32", "setresuid32",
+"getresuid32", "setresgid32", "getresgid32", "chown32", "setuid32",
+"setgid32", "setfsuid32", "setfsgid32", "pivot_root", "mincore",
+"madvise", "getdents64", "fcntl64", 0, "security", "gettid",
+"readahead", "setxattr", "lsetxattr", "fsetxattr", "getxattr",
+"lgetxattr", "fgetxattr", "listxattr", "llistxattr", "flistxattr",
+"removexattr", "lremovexattr", "fremovexattr", "tkill", "sendfile64",
+"futex", "sched_setaffinity", "sched_getaffinity", "set_thread_area",
+"get_thread_area", "io_setup", "io_destroy", "io_getevents", "io_submit",
+"io_cancel", "fadvise64", 0, "exit_group", "lookup_dcookie"
+};
 
 //usar la opcion -sortby de strace
+
+const char* callname(long call);
 
 char *commandStrace = "strace -t -i -qq -q %s %s 2>&1"; 
 
@@ -169,17 +312,44 @@ int tracer(pid_t child, int printSystemCalls, int stopAfterEachCall, int sort){
     
 	int status;
 	ptrace(PTRACE_SETOPTIONS, child, 0, PTRACE_O_TRACESYSGOOD);
+	int firstCall = 1;
+	
 	while(1){
 
 		wait(&status);
 
 		 if(WIFEXITED(status))
 		      break;
-		long params[3];
-		struct user_regs_struct regs;
-		ptrace(PTRACE_GETREGS, child, NULL, &regs);
-		printf("The child made a system call %llu\n", regs.orig_rax);
-		params[0] = ptrace(PTRACE_PEEKUSER,
+		
+		if(firstCall){
+			
+			struct user_regs_struct regs;
+			ptrace(PTRACE_GETREGS, child, NULL, &regs);
+			int syscall =   regs.orig_rax;
+			int retVal = regs.rax;
+			
+			printf("System call %s = %d\n", callname(regs.orig_rax), retVal);
+			
+			long   ins = ptrace(PTRACE_PEEKTEXT,
+                             child, regs.rip,
+                             NULL);
+			print_syscall_args(child);
+                	//printf("%08lx", ins);
+			firstCall = 0;
+
+		}else{
+
+			struct user_regs_struct regs;
+			ptrace(PTRACE_GETREGS, child, NULL, &regs);
+			
+			unsigned long long test =  ptrace(PTRACE_PEEKUSER,
+		                     child, regs.rax);
+			
+			//printf("%llu\n", regs.rax);
+			firstCall = 1;
+			
+		}
+		/*params[0] = ptrace(PTRACE_PEEKUSER,
 		                           child, 8 * RBX,
 		                           NULL);
 		        params[1] = ptrace(PTRACE_PEEKUSER,
@@ -193,7 +363,7 @@ int tracer(pid_t child, int printSystemCalls, int stopAfterEachCall, int sort){
 		               params[0], params[1],
 		               params[2]);
 			 ptrace(PTRACE_PEEKUSER,
-		                     child, regs.rax, NULL);
+		                     child, regs.rax, NULL);*/
 	   ptrace(PTRACE_SYSCALL,
 		           child, NULL, NULL);
 	}
