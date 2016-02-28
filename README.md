@@ -1,5 +1,7 @@
 # Rastreador de "System Calls"
 
+Este rastreador solo funciona en linux de 64 bits y no muestra los argumentos de cada system call.
+
 Para ejecutar el programa se deben ejecutar los siguientes pasos:
 
 

@@ -16,6 +16,15 @@
 #include <sys/reg.h>
 #include <errno.h>
 #include <sys/syscall.h> 
+#include <sys/stat.h>
+#include <fcntl.h>
+
+struct counter{
+	
+	int syscall;
+	int count;
+	
+};
 
 #ifdef __amd64__
 #define eax rax
@@ -34,6 +43,7 @@ enum argtype {
     ARG_PTR,
     ARG_STR
 };
+
 
 
 long __get_reg(pid_t child, int off) {
@@ -91,80 +101,28 @@ void print_syscall_args(pid_t child) {
     int i;
     char *strval;
     for (i = 0; i < nargs; i++) {
-        long arg = get_syscall_arg(child, i);
-        int type =  ARG_INT;
-        switch (type) {
-        case ARG_INT:
-            fprintf(stderr, "%ld", arg);
-            break;
-        case ARG_STR:
-            strval = read_string(child, arg);
-            fprintf(stderr, "\"%s\"", strval);
-            free(strval);
-            break;
-        default:
-            fprintf(stderr, "0x%lx", arg);
-            break;
-        }
-        if (i != nargs - 1)
-            fprintf(stderr, ", ");
+	long arg = get_syscall_arg(child, i);
+	strval = read_string(child, arg);
+	if(strlen(strval) > 0){
+		if(strlen(strval) > 100){
+				strval[100] = '\0';		
+		}
+		 fprintf(stderr, "\"%s\"", strval);
+		    
+	}else{
+			 fprintf(stderr, "%ld", arg);
+	}
+		
+	free(strval);
+	if (i != nargs - 1)
+		fprintf(stderr, ", ");
     }
-}
 
-char *(syscall_names[256]) = {
-"exit", "fork", "read", "write", "open", "close", "waitpid", "creat",
-"link", "unlink", "execve", "chdir", "time", "mknod", "chmod",
-"lchown", "break", "oldstat", "lseek", "getpid", "mount", "umount",
-"setuid", "getuid", "stime", "ptrace", "alarm", "oldfstat", "pause",
-"utime", "stty", "gtty", "access", "nice", "ftime", "sync", "kill",
-"rename", "mkdir", "rmdir", "dup", "pipe", "times", "prof", "brk",
-"setgid", "getgid", "signal", "geteuid", "getegid", "acct", "umount2",
-"lock", "ioctl", "fcntl", "mpx", "setpgid", "ulimit", "oldolduname",
-"umask", "chroot", "ustat", "dup2", "getppid", "getpgrp", "setsid",
-"sigaction", "sgetmask", "ssetmask", "setreuid", "setregid",
-"sigsuspend", "sigpending", "sethostname", "setrlimit", "getrlimit",
-"getrusage", "gettimeofday", "settimeofday", "getgroups", "setgroups",
-"select", "symlink", "oldlstat", "readlink", "uselib", "swapon",
-"reboot", "readdir", "mmap", "munmap", "truncate", "ftruncate",
-"fchmod", "fchown", "getpriority", "setpriority", "profil", "statfs",
-"fstatfs", "ioperm", "socketcall", "syslog", "setitimer", "getitimer",
-"stat", "lstat", "fstat", "olduname", "iopl", "vhangup", "idle",
-"vm86old", "wait4", "swapoff", "sysinfo", "ipc", "fsync", "sigreturn",
-"clone", "setdomainname", "uname", "modify_ldt", "adjtimex",
-"mprotect", "sigprocmask", "create_module", "init_module",
-"delete_module", "get_kernel_syms", "quotactl", "getpgid", "fchdir",
-"bdflush", "sysfs", "personality", "afs_syscall", "setfsuid",
-"setfsgid", "_llseek", "getdents", "_newselect", "flock", "msync",
-"readv", "writev", "getsid", "fdatasync", "_sysctl", "mlock",
-"munlock", "mlockall", "munlockall", "sched_setparam",
-"sched_getparam", "sched_setscheduler", "sched_getscheduler",
-"sched_yield", "sched_get_priority_max", "sched_get_priority_min",
-"sched_rr_get_interval", "nanosleep", "mremap", "setresuid",
-"getresuid", "vm86", "query_module", "poll", "nfsservctl",
-"setresgid", "getresgid", "prctl","rt_sigreturn","rt_sigaction",
-"rt_sigprocmask", "rt_sigpending", "rt_sigtimedwait",
-"rt_sigqueueinfo", "rt_sigsuspend", "pread", "pwrite", "chown",
-"getcwd", "capget", "capset", "sigaltstack", "sendfile", "getpmsg",
-"putpmsg", "vfork", "ugetrlimit", "mmap2", "truncate64",
-"ftruncate64", "stat64", "lstat64", "fstat64", "lchown32", "getuid32",
-"getgid32", "geteuid32", "getegid32", "setreuid32", "setregid32",
-"getgroups32", "setgroups32", "fchown32", "setresuid32",
-"getresuid32", "setresgid32", "getresgid32", "chown32", "setuid32",
-"setgid32", "setfsuid32", "setfsgid32", "pivot_root", "mincore",
-"madvise", "getdents64", "fcntl64", 0, "security", "gettid",
-"readahead", "setxattr", "lsetxattr", "fsetxattr", "getxattr",
-"lgetxattr", "fgetxattr", "listxattr", "llistxattr", "flistxattr",
-"removexattr", "lremovexattr", "fremovexattr", "tkill", "sendfile64",
-"futex", "sched_setaffinity", "sched_getaffinity", "set_thread_area",
-"get_thread_area", "io_setup", "io_destroy", "io_getevents", "io_submit",
-"io_cancel", "fadvise64", 0, "exit_group", "lookup_dcookie"
-};
+}
 
 //usar la opcion -sortby de strace
 
 const char* callname(long call);
-
-char *commandStrace = "strace -t -i -qq -q %s %s 2>&1"; 
 
 char *messageTemplate = "Invalid option: %s, Available options: -V -S -s\n";
 
@@ -174,11 +132,12 @@ static const char* options[] = { "-S", "-V", "-v"};
 
 static struct termios oldt, newt;
 
+struct counter countBySystemCall[500];
+
 void restartBehaviour(){
-
 	tcsetattr(0, TCSANOW, &oldt);
-
 }
+
 void changeBehaviour(){
 
     tcgetattr(0, &oldt);
@@ -257,66 +216,54 @@ int containsOption(char *arg){
 
 void pauseProgramAnyKey(){
 
- printf ( "Press any key to continue . . .\n" );
+ fprintf (stderr, "Press any key to continue . . .\n" );
  //fflush ( stdout );
  getchar();
 	
  
 }
 
-void pauseProgram(FILE *in){
-
- printf ( "Press [Enter] to continue . . ." );
- fflush ( stdout );
-
- int ch;
-
- do
-    ch = fgetc ( in ); 
- while ( ch != EOF && ch != '\n' ); 
-
- clearerr ( in );
-
- printf("\n");
-
-//while ( getchar() != '\n' );
-
-}
-
-
 int traceeme(char *commandToExecute[]){
-
-    ptrace(PTRACE_TRACEME);
-	//execl(commandToExecute[0], commandToExecute[0],commandToExecute, 0);
-	//execl("/bin/ls", "ls", NULL);
-    //kill(getpid(), SIGSTOP);
+    ptrace(PTRACE_TRACEME, 0, 0, 0);
+    int fd = open("/dev/null", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    dup2(fd, 1);   
+    dup2(fd, 2);    
+    close(fd);
     return execvp(commandToExecute[0], commandToExecute);
-	//return 0;
 }
 
-int waitForSyscall(pid_t child) {
+void printSysCall(pid_t child, int retVal, struct user_regs_struct regs){
 
-     int status;
-    while (1) {
-        ptrace(PTRACE_SYSCALL, child, 0, 0);
-        waitpid(child, &status, 0);
-        if (WIFSTOPPED(status) && WSTOPSIG(status) & 0x80)
-            return 0;
-        if (WIFEXITED(status))
-            return 1;
-        fprintf(stderr, "[stopped %d (%x)]\n", status, WSTOPSIG(status));
-    }
+	fprintf(stderr, "%s(", callname(regs.orig_rax));
+
+	long   ins = ptrace(PTRACE_PEEKTEXT, child, regs.rip,NULL);
+
+	//print_syscall_args(child);
+
+	if(retVal == -2){
+		fprintf(stderr, ") = -1 ENOENT (No such file or directory)\n");
+	}else{
+		fprintf(stderr, ") = %d\n", retVal);
+	}
+}
+
+int cmpfunc (const void * a, const void * b){
+	struct counter cA = *(struct counter * )a;
+	struct counter cB = *(struct counter *) b;
+  	return - (cA.count - cB.count);
 }
 
 int tracer(pid_t child, int printSystemCalls, int stopAfterEachCall, int sort){
     
+	changeBehaviour();
+	
 	int status;
 	ptrace(PTRACE_SETOPTIONS, child, 0, PTRACE_O_TRACESYSGOOD);
 	int firstCall = 1;
 	
 	while(1){
 
-		wait(&status);
+		waitpid(child, &status, 0);
 
 		 if(WIFEXITED(status))
 		      break;
@@ -327,53 +274,48 @@ int tracer(pid_t child, int printSystemCalls, int stopAfterEachCall, int sort){
 			ptrace(PTRACE_GETREGS, child, NULL, &regs);
 			int syscall =   regs.orig_rax;
 			int retVal = regs.rax;
+				
+			countBySystemCall[syscall].count++;
+			countBySystemCall[syscall].syscall = syscall;
 			
-			printf("System call %s = %d\n", callname(regs.orig_rax), retVal);
+			if(printSystemCalls){
+				printSysCall(child, retVal, regs);
+				if(stopAfterEachCall){
+					pauseProgramAnyKey();				
+				}
+			}
 			
-			long   ins = ptrace(PTRACE_PEEKTEXT,
-                             child, regs.rip,
-                             NULL);
-			print_syscall_args(child);
-                	//printf("%08lx", ins);
 			firstCall = 0;
 
 		}else{
-
-			struct user_regs_struct regs;
-			ptrace(PTRACE_GETREGS, child, NULL, &regs);
-			
-			unsigned long long test =  ptrace(PTRACE_PEEKUSER,
-		                     child, regs.rax);
-			
-			//printf("%llu\n", regs.rax);
 			firstCall = 1;
-			
 		}
-		/*params[0] = ptrace(PTRACE_PEEKUSER,
-		                           child, 8 * RBX,
-		                           NULL);
-		        params[1] = ptrace(PTRACE_PEEKUSER,
-		                           child, regs.rcx,
-		                           NULL);
-		        params[2] = ptrace(PTRACE_PEEKUSER,
-		                           child, 8 * RDX,
-		                           NULL);
-		        printf("Write called with "
-		               "%ld, %ld, %ld\n",
-		               params[0], params[1],
-		               params[2]);
-			 ptrace(PTRACE_PEEKUSER,
-		                     child, regs.rax, NULL);*/
-	   ptrace(PTRACE_SYSCALL,
-		           child, NULL, NULL);
+	   	ptrace(PTRACE_SYSCALL, child, NULL, NULL);
 	}
+	fprintf(stderr, "exit_group(0) = ?\n");
+
+	int x;
+	if(sort){
+		qsort(countBySystemCall, 500, sizeof(struct counter), cmpfunc);
+	}
+	fprintf(stderr, "\n---------------%s---------------\n", "Accumulative Table");
+	fprintf(stderr, "------------------------------------------------\n\n");
+	fprintf(stderr, "%15s %15s\n", "Syscall", "calls");
+	 
+	for(x = 0; x < 500; x++){
+		if(countBySystemCall[x].count){
+			int syscall = countBySystemCall[x].syscall;
+			
+			fprintf(stderr, "%15s %15d\n", callname(syscall), countBySystemCall[x].count);
+		}
+	}
+	fprintf(stderr, "\n------------------------------------------------\n\n");
+	restartBehaviour();
 	
 }
 
 
 int main(int argc, char *argv[]){
-	
-	//changeBehaviour();
 	
 	pid_t child;
 
@@ -386,10 +328,8 @@ int main(int argc, char *argv[]){
 	if(argc < 2){
 
 		fprintf(stderr, "Incorrect number of arguments: %i. I wait at least one.\nYou need to put the name of the program to track.\n", argc - 1); 
-		restartBehaviour();
 		
 		exit(EXIT_FAILURE);
-		
 	}
 	
 	for(x = 1; x < argc; x++){		
@@ -454,15 +394,6 @@ int main(int argc, char *argv[]){
 		}
 		
 	}	
-
-	//printf("Program to execute:%s\n", commandBuilder);
-
-	//char *finalCommand = (char*) malloc(strlen(commandBuilder) + strlen(commandStrace));
-	
-	//sprintf(finalCommand, commandStrace, outputOption, commandBuilder);
-	
-	//printf("Final command:%s\n", finalCommand);
-	
 	child = fork();
 
 	if(child == 0) {
@@ -470,13 +401,10 @@ int main(int argc, char *argv[]){
 		return traceeme(commandToExecute);
 
 	  } else {
-
+		
 	    return tracer(child, printSystemCalls,  stopAfterEachCall, sort);
 
 	}	
-
-	//restartBehaviour();
-
 	return 0;
 
 }
