@@ -1,6 +1,6 @@
 # Rastreador de "System Calls"
 
-Este rastreador solo funciona en linux de 64 bits y no muestra los argumentos de cada system call.
+Este rastreador solo funciona en linux de 64 bits y no muestra algunos argumentos de los system calls de manera correcta. Con esto me refiero a que no los imprime igual que strace. Además tiene la opción de ordenar la tabla acumulativa de mayor a menor con la opción -S. Para el parseo de algunos de los argumentos me base en este proyecto: https://github.com/nelhage/ministrace, más que todo usando el script de python que genera un arreglo con la información de cada system call. 
 
 Para ejecutar el programa se deben ejecutar los siguientes pasos:
 
